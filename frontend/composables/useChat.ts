@@ -13,9 +13,11 @@ export interface ProductItem {
   category: string
   color: string
   price: number
-  image: string
+  image: string           // emoji fallback
+  image_url?: string      // 真实产品图
   description: string
-  search_url?: string
+  product_url?: string    // 商品详情链接
+  search_url?: string     // 兼容旧字段
 }
 
 interface ChatResponse {
