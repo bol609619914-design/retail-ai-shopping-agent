@@ -9,11 +9,13 @@ export interface ChatMessage {
 export interface ProductItem {
   id: number
   name: string
+  brand?: string
   category: string
   color: string
   price: number
   image: string
   description: string
+  search_url?: string
 }
 
 interface ChatResponse {
@@ -21,6 +23,7 @@ interface ChatResponse {
   items: ProductItem[]
   intent_tags: string[]
   price_range: { min?: number; max?: number } | null
+  source: 'llm' | 'rules'
 }
 
 const MAX_HISTORY_ROUNDS = 3
@@ -53,7 +56,7 @@ export function useChat() {
 
     try {
       const history = messages.value
-        .slice(-(MAX_HISTORY_ROUNDS * 2) - 1, -1)
+        .slice(-(MAX_HISTORY_ROUNDS * 2) + 1, -1)
         .map(({ role, content }) => ({ role, content }))
 
       const data = await $fetch<ChatResponse>(`${config.public.apiBase}/api/chat`, {

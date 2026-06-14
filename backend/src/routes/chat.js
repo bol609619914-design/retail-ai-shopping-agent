@@ -8,7 +8,8 @@ const { getRecommendations } = require('../services/recommendation');
  * POST /api/chat
  * 接收前端拼接的上下文，解析意图，返回推荐商品
  *
- * 优先使用 Mimo LLM 解析意图，失败时回退到规则引擎
+ * 优先使用 DeepSeek LLM 进行意图解析 + 真实商品推荐
+ * 失败时回退到规则引擎 + 模拟商品
  */
 router.post('/', async (req, res) => {
   try {
@@ -20,8 +21,9 @@ router.post('/', async (req, res) => {
 
     let intent;
     let reply;
+    let llmItems = null;
 
-    // 优先使用 LLM 解析意图
+    // 优先使用 LLM 解析意图 + 获取真实商品推荐
     try {
       const llmResult = await parseIntentWithLLM(messages, currentMessage.trim());
       intent = {
@@ -29,6 +31,7 @@ router.post('/', async (req, res) => {
         price_range: llmResult.price_range,
       };
       reply = llmResult.reply;
+      llmItems = llmResult.items;
     } catch (llmErr) {
       console.warn('LLM 解析失败，回退到规则引擎:', llmErr.message);
       // 回退到规则引擎
@@ -36,8 +39,17 @@ router.post('/', async (req, res) => {
       reply = null;
     }
 
-    // 调用推荐API
-    const { items, relaxed } = await getRecommendations(intent);
+    // 如果 LLM 返回了真实商品，直接使用；否则调用模拟推荐
+    let items;
+    let relaxed = false;
+
+    if (llmItems && llmItems.length > 0) {
+      items = llmItems;
+    } else {
+      const result = await getRecommendations(intent);
+      items = result.items;
+      relaxed = result.relaxed;
+    }
 
     // 如果 LLM 没有生成回复，用规则生成
     if (!reply) {
@@ -49,7 +61,7 @@ router.post('/', async (req, res) => {
       items,
       intent_tags: intent.intent_tags,
       price_range: intent.price_range,
-      source: reply ? 'llm' : 'rules',
+      source: llmItems && llmItems.length > 0 ? 'llm' : 'rules',
     });
   } catch (err) {
     console.error('聊天处理错误:', err);

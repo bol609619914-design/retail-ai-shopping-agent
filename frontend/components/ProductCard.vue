@@ -10,6 +10,10 @@
       <div class="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-sm shadow-sm border border-white/50">
         <span class="text-xs font-heading font-bold text-orange-500">¥{{ item.price }}</span>
       </div>
+      <!-- Brand Badge -->
+      <div v-if="item.brand" class="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-emerald-500/90 backdrop-blur-sm">
+        <span class="text-[10px] font-semibold text-white">{{ item.brand }}</span>
+      </div>
     </div>
 
     <!-- Info -->
@@ -23,8 +27,8 @@
       <div class="mt-3 flex items-center justify-between">
         <span class="text-sm font-heading font-bold text-orange-500">¥{{ item.price }}</span>
         <span class="text-[11px] text-emerald-500 font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center gap-0.5">
-          查看详情
-          <Icons name="arrow-right" :size="12" />
+          去购买
+          <Icons name="external-link" :size="11" />
         </span>
       </div>
     </div>
@@ -39,6 +43,12 @@ const props = defineProps<{
 }>()
 
 function handleClick() {
-  alert(`即将跳转：${props.item.name}\n（演示模式）`)
+  if (props.item.search_url) {
+    window.open(props.item.search_url, '_blank', 'noopener,noreferrer')
+  } else {
+    // 兜底：用商品名搜索
+    const query = encodeURIComponent(`${props.item.brand || ''} ${props.item.name}`.trim())
+    window.open(`https://search.jd.com/Search?keyword=${query}`, '_blank', 'noopener,noreferrer')
+  }
 }
 </script>
