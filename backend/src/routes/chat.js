@@ -1,25 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { parseIntent } = require('../services/intentParser');
+const { parseIntentWithLLM } = require('../services/llm');
 const { getRecommendations } = require('../services/recommendation');
 
 /**
  * POST /api/chat
  * 接收前端拼接的上下文，解析意图，返回推荐商品
  *
- * 请求体:
- * {
- *   messages: [{ role: 'user'|'assistant', content: string }],  // 历史消息
- *   currentMessage: string                                       // 当前用户消息
- * }
- *
- * 响应体:
- * {
- *   reply: string,           // AI回复文本
- *   items: object[],         // 推荐商品列表
- *   intent_tags: string[],   // 解析出的意图标签（调试用）
- *   price_range: object|null // 解析出的价格区间（调试用）
- * }
+ * 优先使用 Mimo LLM 解析意图，失败时回退到规则引擎
  */
 router.post('/', async (req, res) => {
   try {
@@ -29,20 +18,38 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'currentMessage 不能为空' });
     }
 
-    // 1. 解析意图
-    const intent = parseIntent(messages, currentMessage.trim());
+    let intent;
+    let reply;
 
-    // 2. 调用推荐API
+    // 优先使用 LLM 解析意图
+    try {
+      const llmResult = await parseIntentWithLLM(messages, currentMessage.trim());
+      intent = {
+        intent_tags: llmResult.intent_tags,
+        price_range: llmResult.price_range,
+      };
+      reply = llmResult.reply;
+    } catch (llmErr) {
+      console.warn('LLM 解析失败，回退到规则引擎:', llmErr.message);
+      // 回退到规则引擎
+      intent = parseIntent(messages, currentMessage.trim());
+      reply = null;
+    }
+
+    // 调用推荐API
     const { items, relaxed } = await getRecommendations(intent);
 
-    // 3. 构造回复文本
-    const reply = buildReply(intent, items, relaxed);
+    // 如果 LLM 没有生成回复，用规则生成
+    if (!reply) {
+      reply = buildReply(intent, items, relaxed);
+    }
 
     res.json({
       reply,
       items,
       intent_tags: intent.intent_tags,
       price_range: intent.price_range,
+      source: reply ? 'llm' : 'rules',
     });
   } catch (err) {
     console.error('聊天处理错误:', err);
@@ -51,7 +58,7 @@ router.post('/', async (req, res) => {
 });
 
 /**
- * 根据意图和结果构造自然语言回复
+ * 根据意图和结果构造自然语言回复（规则引擎回退）
  */
 function buildReply(intent, items, relaxed = false) {
   const { intent_tags, price_range } = intent;
@@ -62,13 +69,11 @@ function buildReply(intent, items, relaxed = false) {
 
   let reply = '';
 
-  // 有明确类别
   const category = intent_tags.find(tag =>
     ['冲锋衣', '鞋子', 'T恤', '裤子', '帽子', '背包', '外套', '裙子'].includes(tag)
   );
 
   if (relaxed) {
-    // 条件放宽时的提示
     if (category) {
       reply = `没有找到完全符合条件的${category}，为您推荐以下${category}，共${items.length}款：`;
     } else {
