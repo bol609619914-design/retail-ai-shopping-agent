@@ -1,8 +1,9 @@
 /**
  * LLM 服务 - DeepSeek API 集成
- * 使用 LLM 进行意图解析 + 真实商品推荐 + 真实图片URL
+ * 限定13个品牌，图片从官网CDN真实获取
  */
 const OpenAI = require('openai');
+const { findProductImage } = require('./imageSearch');
 
 const client = new OpenAI({
   apiKey: process.env.MIMO_API_KEY,
@@ -11,15 +12,22 @@ const client = new OpenAI({
 
 const MODEL = process.env.MIMO_MODEL || 'deepseek-chat';
 
+// 限定品牌列表
+const ALLOWED_BRANDS = [
+  '迪卡侬 Decathlon', 'Lululemon', '优衣库 Uniqlo', 'H&M',
+  '耐克 Nike', '阿迪达斯 Adidas', '北面 The North Face',
+  '哥伦比亚 Columbia', '狼爪 Jack Wolfskin', 'MUJI',
+  '美津侬 Mizuno', '亚瑟士 ASICS', '李维斯 Levi\'s',
+];
+
 /**
  * 从对话上下文中提取结构化意图 + 推荐真实商品
  */
 async function parseIntentWithLLM(messages, currentMessage) {
-  const systemPrompt = `你是一个专业的国际零售导购AI助手。用户会告诉你想买什么商品，你需要：
+  const systemPrompt = `你是一个专业的零售导购AI助手。用户会告诉你想买什么商品，你需要推荐真实存在的商品。
 
-1. 理解用户意图（结合对话历史）
-2. 推荐互联网上真实存在的国际品牌商品
-3. 提供真实可用的产品图片URL
+**限定品牌（只能推荐这些品牌）：**
+${ALLOWED_BRANDS.join('、')}
 
 请严格按以下JSON格式返回，不要返回其他内容：
 {
@@ -28,33 +36,23 @@ async function parseIntentWithLLM(messages, currentMessage) {
   "reply": "你的自然语言回复，友好、简洁、专业",
   "items": [
     {
-      "name": "商品全称（含型号）",
-      "brand": "品牌名",
+      "name": "商品名称（具体到型号/系列）",
+      "brand": "品牌中文名",
       "category": "商品类别",
       "color": "颜色",
       "price": 数字（人民币参考价）,
-      "description": "一句话描述核心卖点",
-      "image_url": "真实产品图片的URL"
+      "description": "一句话描述核心卖点"
     }
   ]
 }
 
-商品推荐规则：
-1. 推荐国际知名品牌的真实商品
-2. 价格用人民币标注
-3. 推荐4-6个不同品牌/价位的商品
-4. 商品名称要具体到型号，品牌名要准确
-5. image_url 必须是真实可用的图片URL，优先使用：
-   - 品牌官网的图片CDN（如 static.nike.com, assets.adidas.com）
-   - 亚马逊商品图片（如 m.media-amazon.com）
-   - 其他知名电商平台的图片CDN
-   - 如果无法确定真实URL，就留空字符串""
-
-图片URL参考格式：
-- Nike: https://static.nike.com/a/images/t_PDP_1728_v1/f_auto,q_auto:eco/xxx/产品名.png
-- Adidas: https://assets.adidas.com/images/h_840,f_auto,q_auto,fl_lossy,c_fill,g_auto/产品名.jpg
-- Amazon: https://m.media-amazon.com/images/I/xxx.jpg
-- 如果不确定真实URL，image_url 填 ""`;
+规则：
+1. 只能推荐上述13个品牌的商品，不要推荐其他品牌
+2. 商品名称要真实存在，比如：Nike Air Zoom Pegasus 41、Adidas Ultraboost、ASICS GEL-Nimbus 26、Levi's 501、Lululemon Align
+3. 价格用人民币标注（参考国内官方售价）
+4. 推荐4-6个商品，覆盖不同价位
+5. brand字段用中文名（耐克、阿迪达斯、优衣库等）
+6. 如果用户说了颜色/价格等限定条件，要严格遵守`;
 
   const apiMessages = [
     { role: 'system', content: systemPrompt },
@@ -67,13 +65,12 @@ async function parseIntentWithLLM(messages, currentMessage) {
       model: MODEL,
       messages: apiMessages,
       temperature: 0.7,
-      max_tokens: 2000,
+      max_tokens: 1500,
     });
 
     const content = completion.choices[0].message.content.trim();
-
-    // 尝试解析JSON
     const jsonMatch = content.match(/\{[\s\S]*\}/);
+
     if (!jsonMatch) {
       return {
         intent_tags: [],
@@ -86,19 +83,23 @@ async function parseIntentWithLLM(messages, currentMessage) {
     const parsed = JSON.parse(jsonMatch[0]);
     const rawItems = parsed.items || [];
 
-    // 组装最终结果
-    const items = rawItems.map((item, index) => ({
-      id: Date.now() + index,
-      name: item.name || '未知商品',
-      brand: item.brand || '',
-      category: item.category || '',
-      color: item.color || '',
-      price: item.price || 0,
-      description: item.description || '',
-      image_url: item.image_url || '',
-      product_url: `https://www.amazon.com/s?k=${encodeURIComponent(`${item.brand} ${item.name}`)}`,
-      image: getCategoryEmoji(item.category),
-    }));
+    // 为每个商品匹配真实图片
+    const items = rawItems.map((item, index) => {
+      const imageUrl = findProductImage(item.brand, item.name);
+
+      return {
+        id: Date.now() + index,
+        name: item.name || '未知商品',
+        brand: item.brand || '',
+        category: item.category || '',
+        color: item.color || '',
+        price: item.price || 0,
+        description: item.description || '',
+        image_url: imageUrl || '',
+        product_url: `https://www.amazon.com/s?k=${encodeURIComponent(`${item.brand} ${item.name}`)}`,
+        image: getCategoryEmoji(item.category),
+      };
+    });
 
     return {
       intent_tags: Array.isArray(parsed.intent_tags) ? parsed.intent_tags : [],
@@ -112,15 +113,12 @@ async function parseIntentWithLLM(messages, currentMessage) {
   }
 }
 
-/**
- * 根据商品类别返回 emoji（fallback）
- */
 function getCategoryEmoji(category) {
   const map = {
     '冲锋衣': '🧥', '鞋子': '👟', '运动鞋': '👟', '跑步鞋': '👟',
     'T恤': '👕', '裤子': '👖', '牛仔裤': '👖', '帽子': '🧢',
     '背包': '🎒', '双肩包': '🎒', '外套': '🧥', '羽绒服': '🧥',
-    '裙子': '👗', '连衣裙': '👗',
+    '裙子': '👗', '连衣裙': '👗', '卫衣': '🧥', '夹克': '🧥',
   };
   for (const [key, emoji] of Object.entries(map)) {
     if (category && category.includes(key)) return emoji;
