@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;500;600;700&family=Rubik:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-family: 'Nunito Sans', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-900;
+    background-image:
+      radial-gradient(at 20% 0%, rgba(16, 185, 129, 0.08) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, rgba(249, 115, 22, 0.06) 0px, transparent 50%);
+    min-height: 100vh;
+  }
+
+  ::selection {
+    @apply bg-emerald-200 text-emerald-900;
+  }
+
+  ::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300/60 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-400/60;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(203, 213, 225, 0.6) transparent;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-xl border border-white/40 shadow-glass;
+  }
+
+  .glass-panel-solid {
+    @apply bg-white/90 backdrop-blur-lg border border-white/50 shadow-glass;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           px-5 py-2.5 rounded-xl
+           bg-gradient-to-r from-emerald-500 to-emerald-600
+           text-white font-semibold text-sm
+           shadow-md shadow-emerald-500/20
+           hover:shadow-lg hover:shadow-emerald-500/30
+           hover:from-emerald-600 hover:to-emerald-700
+           active:scale-[0.97]
+           transition-all duration-200 ease-out
+           disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100
+           cursor-pointer;
+  }
+
+  .btn-cta {
+    @apply inline-flex items-center justify-center gap-2
+           px-5 py-2.5 rounded-xl
+           bg-gradient-to-r from-orange-500 to-orange-600
+           text-white font-semibold text-sm
+           shadow-md shadow-orange-500/20
+           hover:shadow-lg hover:shadow-orange-500/30
+           hover:from-orange-600 hover:to-orange-700
+           active:scale-[0.97]
+           transition-all duration-200 ease-out
+           cursor-pointer;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2
+           px-4 py-2 rounded-xl
+           text-slate-500 font-medium text-sm
+           hover:bg-slate-100/80 hover:text-slate-700
+           active:bg-slate-200/80
+           transition-all duration-200 ease-out
+           cursor-pointer;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-2xl
+           bg-white/80 border border-slate-200/80
+           text-slate-800 text-sm font-body
+           placeholder:text-slate-400
+           focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400
+           transition-all duration-200 ease-out;
+  }
+
+  .tag-pill {
+    @apply px-4 py-2 rounded-full
+           bg-white border border-slate-200
+           text-sm text-slate-600 font-medium
+           hover:border-emerald-300 hover:text-emerald-600 hover:bg-emerald-50
+           transition-all duration-200 ease-out
+           cursor-pointer shadow-sm;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
